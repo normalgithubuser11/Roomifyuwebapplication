@@ -1,20 +1,49 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { BookingCard } from '../components/BookingCard';
-import { currentUser, bookings, rooms } from '../data/mockData';
+import { currentUser, rooms } from '../data/mockData';
 import { Calendar, Clock, CheckCircle, Home } from 'lucide-react';
 import { Avatar, AvatarFallback } from '../components/ui/avatar';
+import { fetchBookings } from '../api/bookings';
+import type { Booking } from '../data/mockData';
 
 export function DashboardPage() {
   const navigate = useNavigate();
-  
-  // Get user's upcoming bookings
-  const userBookings = bookings
-    .filter(b => b.userId === currentUser.id)
-    .filter(b => new Date(b.date) >= new Date())
-    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+  const [bookings, setBookings] = useState<Booking[]>([]);
+
+  const today = useMemo(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchBookings(currentUser.id)
+      .then((rows) => {
+        if (!cancelled) setBookings(rows);
+      })
+      .catch(() => {
+        if (!cancelled) setBookings([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const userBookings = useMemo(() => {
+    return bookings
+      .filter(b => b.userId === currentUser.id)
+      .filter(b => {
+        const bookingDate = new Date(b.date);
+        bookingDate.setHours(0, 0, 0, 0);
+        return bookingDate >= today;
+      })
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  }, [bookings, today]);
 
   const stats = [
     {

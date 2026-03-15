@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { BookingCard } from '../components/BookingCard';
-import { bookings, currentUser } from '../data/mockData';
+import { currentUser } from '../data/mockData';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { Input } from '../components/ui/input';
 import { Button } from '../components/ui/button';
@@ -14,22 +14,57 @@ import {
   SelectValue,
 } from '../components/ui/select';
 import { toast } from 'sonner';
+import { deleteBooking, fetchBookings, updateBooking } from '../api/bookings';
+import type { Booking } from '../data/mockData';
 
 export function MyBookingsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
 
-  const userBookings = bookings.filter(b => b.userId === currentUser.id);
+  const [bookings, setBookings] = useState<Booking[]>([]);
+
+  const today = useMemo(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchBookings(currentUser.id)
+      .then((rows) => {
+        if (!cancelled) setBookings(rows);
+      })
+      .catch(() => {
+        if (!cancelled) setBookings([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const userBookings = useMemo(
+    () => bookings.filter(b => b.userId === currentUser.id),
+    [bookings]
+  );
 
   const upcomingBookings = userBookings
-    .filter(b => new Date(b.date) >= new Date() && b.status !== 'cancelled')
+    .filter(b => {
+      const bookingDate = new Date(b.date);
+      bookingDate.setHours(0, 0, 0, 0);
+      return bookingDate >= today && b.status !== 'cancelled';
+    })
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
   const pastBookings = userBookings
-    .filter(b => new Date(b.date) < new Date() || b.status === 'cancelled')
+    .filter(b => {
+      const bookingDate = new Date(b.date);
+      bookingDate.setHours(0, 0, 0, 0);
+      return bookingDate < today || b.status === 'cancelled';
+    })
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-  const filterBookings = (bookingsList: typeof bookings) => {
+  const filterBookings = (bookingsList: Booking[]) => {
     return bookingsList.filter(booking => {
       // Search filter
       if (searchQuery && !booking.roomName.toLowerCase().includes(searchQuery.toLowerCase()) &&
@@ -46,15 +81,47 @@ export function MyBookingsPage() {
     });
   };
 
-  const handleCancel = (booking: typeof bookings[0]) => {
-    toast.success(`Booking for ${booking.roomName} has been cancelled.`);
+  const handleCancel = async (booking: Booking) => {
+    try {
+      await deleteBooking(booking.id);
+      setBookings(prev => prev.filter(b => b.id !== booking.id));
+      toast.success(`Booking for ${booking.roomName} has been cancelled.`);
+    } catch {
+      toast.error('Failed to cancel booking. Please try again.');
+    }
   };
 
-  const handleEdit = (booking: typeof bookings[0]) => {
-    toast.info('Edit booking functionality coming soon!');
+  const handleEdit = async (booking: Booking) => {
+    const newPurpose = window.prompt('Update purpose', booking.purpose);
+    if (newPurpose === null) return;
+
+    const newAttendeesRaw = window.prompt(
+      'Update number of attendees',
+      String(booking.attendees),
+    );
+    if (newAttendeesRaw === null) return;
+
+    const newAttendees = Number(newAttendeesRaw);
+    if (!Number.isFinite(newAttendees) || newAttendees <= 0) {
+      toast.error('Attendees must be a positive number.');
+      return;
+    }
+
+    try {
+      const updated = await updateBooking(booking.id, {
+        purpose: newPurpose,
+        attendees: newAttendees,
+      });
+      setBookings(prev =>
+        prev.map(b => (b.id === updated.id ? updated : b)),
+      );
+      toast.success('Booking updated.');
+    } catch {
+      toast.error('Failed to update booking. Please try again.');
+    }
   };
 
-  const handleView = (booking: typeof bookings[0]) => {
+  const handleView = (booking: Booking) => {
     toast.info('View booking details coming soon!');
   };
 

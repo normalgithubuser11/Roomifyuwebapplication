@@ -7,5 +7,16 @@
 
   Run `npm i` to install the dependencies.
 
-  Run `npm run dev` to start the development server.
+### Database setup (MySQL)
+
+- Create a database (example): `CREATE DATABASE roomifyu;`
+- Copy `.env.example` to `.env` and fill in your MySQL credentials.
+
+The API will auto-create the `bookings` table on startup.
+
+### Run the app (web + API)
+
+Run `npm run dev` to start:
+- the Vite web app
+- the local API server on `http://localhost:3001`
   

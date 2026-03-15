@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router';
-import { rooms, generateTimeSlots } from '../data/mockData';
+import { currentUser, rooms, generateTimeSlots } from '../data/mockData';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { StatusBadge } from '../components/StatusBadge';
@@ -13,6 +13,7 @@ import { Checkbox } from '../components/ui/checkbox';
 import { Calendar } from '../components/ui/calendar';
 import { toast } from 'sonner';
 import { ImageWithFallback } from '../components/figma/ImageWithFallback';
+import { createBooking } from '../api/bookings';
 
 export function RoomDetailPage() {
   const { roomId } = useParams();
@@ -65,7 +66,7 @@ export function RoomDetailPage() {
     );
   };
 
-  const handleBookingSubmit = () => {
+  const handleBookingSubmit = async () => {
     if (bookingStep === 1) {
       // Validate step 1
       if (!selectedTime.start || !selectedTime.end) {
@@ -79,17 +80,48 @@ export function RoomDetailPage() {
         toast.error('Please fill in all required fields');
         return;
       }
-      // Submit booking
-      toast.success('Booking request submitted successfully! Awaiting approval.');
-      setShowBookingModal(false);
-      // Reset form
-      setBookingStep(1);
-      setSelectedTime({ start: '', end: '' });
-      setPurpose('');
-      setAttendees('');
-      setSelectedEquipment([]);
-      setNotes('');
-      setIsRecurring(false);
+      try {
+        const requiresApproval = room.type === 'lecture-hall' || room.capacity > 50;
+        const status = requiresApproval ? 'pending' : 'confirmed';
+        const yyyyMmDd = selectedDate.toISOString().slice(0, 10);
+
+        await createBooking({
+          roomId: room.id,
+          userId: currentUser.id,
+          userName: currentUser.name,
+          roomName: room.name,
+          building: room.building,
+          date: yyyyMmDd,
+          startTime: selectedTime.start,
+          endTime: selectedTime.end,
+          purpose,
+          attendees: Number(attendees),
+          status,
+          equipment: selectedEquipment,
+          notes,
+          isRecurring,
+        });
+
+        toast.success(
+          status === 'pending'
+            ? 'Booking request submitted successfully! Awaiting approval.'
+            : 'Booking confirmed successfully!'
+        );
+
+        setShowBookingModal(false);
+        // Reset form
+        setBookingStep(1);
+        setSelectedTime({ start: '', end: '' });
+        setPurpose('');
+        setAttendees('');
+        setSelectedEquipment([]);
+        setNotes('');
+        setIsRecurring(false);
+
+        navigate('/dashboard');
+      } catch (_e) {
+        toast.error('Failed to submit booking. Please try again.');
+      }
     }
   };
 
